@@ -1,0 +1,10 @@
+NUMBER=1
+PLUS=2
+MUL=3
+LPAREN=4
+RPAREN=5
+WS=6
+'+'=2
+'*'=3
+'('=4
+')'=5
