@@ -16,16 +16,16 @@ class CLIParser {
         bool version;
         bool ast_dump;
 
+        // Middle end targets
         bool emit_mlir;
         bool emit_llvm;
 
-        // Strings
-        /*
-        std::string backend_target;
-        */
+        // Back end targets
+
+        // File identifiers
         std::string infile_name;
         std::string outfile_name;
-
+        
         std::optional<Error> error;
         std::optional<Error> parse_arguments(int argc, char* argv[]);
 
@@ -33,21 +33,22 @@ class CLIParser {
 
     CLIParser(int argc, char* argv[]);
     ~CLIParser();
+    std::optional<Error> get_error() const;
 
-    std::optional<Error> get_error();
+    /*** File management ***/
+    std::string get_input_file_name() const;
+    std::string get_output_file_name() const;
 
+    /*** Flags queries ***/
     bool show_help() const;
-
     bool show_version() const;
-
     bool show_ast_dump() const;
 
+    /*** Printing functions ***/
     void print_help() const;
-
     void print_version() const;
-
-    //Lacks ast as parameter
     void print_ast_dump() const;
+    //Lacks AST as parameter
 
     
 };

@@ -1,7 +1,4 @@
-#include "driver/CLIParser.h"
-
-// WIP: Implement error types instead of just void or bool
-
+#include "cli/CLIParser.h"
 
 std::string get_filename_without_extension(const std::string& filename) {
     size_t last_dot = filename.rfind('.');
@@ -22,7 +19,7 @@ infile_name(""), outfile_name("")  {
     this->error = parse_arguments(argc, argv);
 }
 
-std::optional<Error> CLIParser::get_error() { return this->error; }
+std::optional<Error> CLIParser::get_error() const { return this->error; }
 
 std::optional<Error> CLIParser::parse_arguments(int argc, char* argv[]) {
     
@@ -38,18 +35,16 @@ std::optional<Error> CLIParser::parse_arguments(int argc, char* argv[]) {
         else if (arg == "--ast-dump") {
             this->ast_dump = true;
         }
-        else if (arg == "input") {
+        else if (arg == "--input") {
             if (i+1 < argc) this->infile_name = argv[i+1];
             else return Error(CLI::MissingArgument, "No input file given");
         }
-        else if (arg == "output") {
+        else if (arg == "--output") {
             if (i+1 < argc) this->outfile_name = argv[i+1];
             else return Error(CLI::MissingArgument, "No output file name given");
         }
         else {
-            if (this->infile_name == "") {
-                this->infile_name = arg;
-            }
+            if (this->infile_name == "") this->infile_name = arg;
             else return Error(CLI::InvalidArgument, arg);
         }
     }
@@ -61,14 +56,21 @@ std::optional<Error> CLIParser::parse_arguments(int argc, char* argv[]) {
         this->outfile_name = get_filename_without_extension(this->infile_name);
 }
 
-// Boolean flag functions
+/*** File management ***/
+std::string CLIParser::get_input_file_name() const {
+    return this->infile_name;
+}
+
+std::string CLIParser::get_output_file_name() const {
+    return this->outfile_name;
+}
+
+/*** Flags queries ***/
 bool CLIParser::show_help() const { return help; }
-
 bool CLIParser::show_version() const { return version; }
-
 bool CLIParser::show_ast_dump() const { return ast_dump; }
 
-// Print functions
+/*** Printing functions ***/
 void CLIParser::print_help() const {
     std::cout << "The Troiani Compiler" << std::endl;
     std::cout << "=====================" << std::endl;
