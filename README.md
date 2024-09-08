@@ -4,6 +4,8 @@
 
 This is the main official repository of the compiler for the **Troiani** programming language. 
 
+![Troiani Logo](./resources/troiani_logo_transparent.png)
+
 ## Why Troiani?
 - **Ease of Use**: Designed with simplicity in mind, this programming language combines high-level syntax with low-level capabilities, supporting a wide range of programming paradigms.
 - **Performance**: Making use of the LLVM ecosystem, this compiler delivers exceptionally competitive performance and a robust infrastructure.
