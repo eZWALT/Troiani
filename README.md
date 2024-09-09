@@ -4,7 +4,7 @@
 
 This is the main official repository of the compiler for the **Troiani** programming language. 
 
-![Troiani Logo](./resources/troiani_logo_transparent.png)
+<img src="./resources/troiani_logo_transparent.png" alt="Troiani Logo" width="512" height="512"/>
 
 ## Why Troiani?
 - **Ease of Use**: Designed with simplicity in mind, this programming language combines high-level syntax with low-level capabilities, supporting a wide range of programming paradigms.
