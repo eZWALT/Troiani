@@ -46,6 +46,10 @@ public:
         OutOfMemory,
     };
 
+    enum class Configuration {
+        NonExistentValue,
+    };
+
     static std::string to_string(CLI err_ty);
     static std::string to_string(Preprocessing err_ty);
     static std::string to_string(Syntax err_ty);
@@ -54,6 +58,7 @@ public:
     static std::string to_string(Optimization err_ty);
     static std::string to_string(Linking err_ty);
     static std::string to_string(Runtime err_ty);
+    static std::string to_string(Configuration err_ty);
 };
 
 
