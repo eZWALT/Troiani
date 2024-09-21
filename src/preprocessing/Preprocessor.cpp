@@ -1,4 +1,4 @@
-#include "preprocessing/Preprocessor.h"
+#include "Preprocessor.h"
 #include <fstream>
 #include <sstream>
 #include <regex>
@@ -17,7 +17,7 @@ std::optional<Error> Preprocessor::load_file() {
 
     std::stringstream buff;
     buff << file.rdbuf();
-    file_contents = buffer.str();
+    file_contents = buff.str();
     return std::nullopt;
 }
 
@@ -29,7 +29,7 @@ std::optional<Error> Preprocessor::preprocess() {
     err = remove_comments();
     if(err) return err;
 
-    err = handle_includes();
+    err = handle_inclusions();
     if(err) return err;
 
     err = handle_macros();
@@ -52,7 +52,7 @@ std::optional<Error> Preprocessor::remove_comments() {
 }
 
 
-std::optional<Error> Preprocessor::handle_includes() {
+std::optional<Error> Preprocessor::handle_inclusions() {
     // TODO: Implement include handling
     return std::nullopt;
 }

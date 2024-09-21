@@ -1,0 +1,2 @@
+/usr/bin/ar qc libcli.a CMakeFiles/cli.dir/CLIParser.cpp.o
+/usr/bin/ranlib libcli.a

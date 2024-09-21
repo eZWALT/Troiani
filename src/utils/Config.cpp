@@ -1,6 +1,4 @@
-#include "utils/Config.h"
-#include <string>
-#include <expected>
+#include "Config.h"
 
 Config::Config() {
     this->config_map["version"] = "1.0";
@@ -15,12 +13,8 @@ void Config::set(const std::string& key, const std::string& value) {
     this->config_map[key] = value;
 }
 
-std::expected<std::string, Error> Config::get(const std::string& key) {
+std::optional<std::string> Config::get(const std::string& key) const{
     auto it = this->config_map.find(key);
     if(it != this->config_map.end()) return it->second;
-    
-    else return Error(
-            Configuration::InvalidValue, 
-            "[" + key + "]" + " not found in configuration"
-        );
+    else return std::nullopt;
 }

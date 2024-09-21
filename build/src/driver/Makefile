@@ -162,25 +162,25 @@ depend:
 .PHONY : depend
 
 # Convenience name for target.
-src/driver/CMakeFiles/Troiani.dir/rule:
-	cd /home/walterjtv/Escritorio/SIDE/Troiani/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/driver/CMakeFiles/Troiani.dir/rule
-.PHONY : src/driver/CMakeFiles/Troiani.dir/rule
+src/driver/CMakeFiles/troiani.dir/rule:
+	cd /home/walterjtv/Escritorio/SIDE/Troiani/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/driver/CMakeFiles/troiani.dir/rule
+.PHONY : src/driver/CMakeFiles/troiani.dir/rule
 
 # Convenience name for target.
-Troiani: src/driver/CMakeFiles/Troiani.dir/rule
-.PHONY : Troiani
+troiani: src/driver/CMakeFiles/troiani.dir/rule
+.PHONY : troiani
 
 # fast build rule for target.
-Troiani/fast:
-	cd /home/walterjtv/Escritorio/SIDE/Troiani/build && $(MAKE) $(MAKESILENT) -f src/driver/CMakeFiles/Troiani.dir/build.make src/driver/CMakeFiles/Troiani.dir/build
-.PHONY : Troiani/fast
+troiani/fast:
+	cd /home/walterjtv/Escritorio/SIDE/Troiani/build && $(MAKE) $(MAKESILENT) -f src/driver/CMakeFiles/troiani.dir/build.make src/driver/CMakeFiles/troiani.dir/build
+.PHONY : troiani/fast
 
 main.o: main.cpp.o
 .PHONY : main.o
 
 # target to build an object file
 main.cpp.o:
-	cd /home/walterjtv/Escritorio/SIDE/Troiani/build && $(MAKE) $(MAKESILENT) -f src/driver/CMakeFiles/Troiani.dir/build.make src/driver/CMakeFiles/Troiani.dir/main.cpp.o
+	cd /home/walterjtv/Escritorio/SIDE/Troiani/build && $(MAKE) $(MAKESILENT) -f src/driver/CMakeFiles/troiani.dir/build.make src/driver/CMakeFiles/troiani.dir/main.cpp.o
 .PHONY : main.cpp.o
 
 main.i: main.cpp.i
@@ -188,7 +188,7 @@ main.i: main.cpp.i
 
 # target to preprocess a source file
 main.cpp.i:
-	cd /home/walterjtv/Escritorio/SIDE/Troiani/build && $(MAKE) $(MAKESILENT) -f src/driver/CMakeFiles/Troiani.dir/build.make src/driver/CMakeFiles/Troiani.dir/main.cpp.i
+	cd /home/walterjtv/Escritorio/SIDE/Troiani/build && $(MAKE) $(MAKESILENT) -f src/driver/CMakeFiles/troiani.dir/build.make src/driver/CMakeFiles/troiani.dir/main.cpp.i
 .PHONY : main.cpp.i
 
 main.s: main.cpp.s
@@ -196,7 +196,7 @@ main.s: main.cpp.s
 
 # target to generate assembly for a file
 main.cpp.s:
-	cd /home/walterjtv/Escritorio/SIDE/Troiani/build && $(MAKE) $(MAKESILENT) -f src/driver/CMakeFiles/Troiani.dir/build.make src/driver/CMakeFiles/Troiani.dir/main.cpp.s
+	cd /home/walterjtv/Escritorio/SIDE/Troiani/build && $(MAKE) $(MAKESILENT) -f src/driver/CMakeFiles/troiani.dir/build.make src/driver/CMakeFiles/troiani.dir/main.cpp.s
 .PHONY : main.cpp.s
 
 # Help Target
@@ -211,7 +211,7 @@ help:
 	@echo "... install/strip"
 	@echo "... list_install_components"
 	@echo "... rebuild_cache"
-	@echo "... Troiani"
+	@echo "... troiani"
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"

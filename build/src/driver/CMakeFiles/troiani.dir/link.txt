@@ -1,0 +1,1 @@
+/usr/bin/clang++-18 CMakeFiles/troiani.dir/main.cpp.o -o troiani  ../cli/libcli.a ../utils/libutils.a ../preprocessing/libpreprocessing.a ../utils/libutils.a 
