@@ -3,8 +3,7 @@
 #include <sstream>
 #include <regex>
 
-//There are 5 types of streams: in/infile/out/outfile/string
-
+//There are 5 types of streams in modern c++: in/infile/out/outfile/string
 Preprocessor::Preprocessor(const std::string& file_name):
 file_name(file_name) {}
 

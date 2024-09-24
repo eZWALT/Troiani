@@ -1,4 +1,0 @@
-
-main() {
-	var:bool juan <- true;
-}

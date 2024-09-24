@@ -39,9 +39,9 @@ int main(int argc, char* argv[]) {
     //Preprocessing phase 
     Preprocessor preprocessor = Preprocessor(cli.get_input_file_name());
     preprocessor.preprocess();
-    std::cout << preprocessor.get_processed_content() << std::endl;
+    std::string preprocessed_file = preprocessor.get_processed_content();
 
-
+    
     std::cout << "Compilation failed successfully" << std::endl;
     return 0;
 }

@@ -1,0 +1,3 @@
+fun main(argc: i32, argv: string[]) {
+	return argc;
+}
