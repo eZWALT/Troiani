@@ -1,2 +1,0 @@
-/usr/bin/ar qc libutils.a CMakeFiles/utils.dir/Config.cpp.o CMakeFiles/utils.dir/Error.cpp.o
-/usr/bin/ranlib libutils.a
