@@ -5,6 +5,7 @@
 #include "Error.h"
 #include "CLIParser.h"
 #include "Preprocessor.h"
+#include "SourceFile.h"
 
 
 
@@ -37,11 +38,19 @@ int main(int argc, char* argv[]) {
     }
 
     //Preprocessing phase 
-    Preprocessor preprocessor = Preprocessor(cli.get_input_file_name());
-    preprocessor.preprocess();
-    std::string preprocessed_file = preprocessor.get_processed_content();
 
-    
+    SourceFile source_file = SourceFile(cli.get_input_file_name());
+    Preprocessor preprocessor = Preprocessor(source_file);
+
+    std::optional<Error> pre_err = preprocessor.preprocess();
+    if(pre_err) {
+        pre_err->log();
+        return 1;
+    }
+    SourceFile preprocessed_file = preprocessor.get_processed_file();
+    std::cout << preprocessed_file.get_content() << std::endl;
+
+
     std::cout << "Compilation failed successfully" << std::endl;
     return 0;
 }

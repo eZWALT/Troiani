@@ -1,8 +1,4 @@
 #include "CLIParser.h"
-#include <optional>
-#include <regex>
-#include <iostream>
-#include <filesystem>
 
 
 std::string get_filename_without_extension(const std::string& filename) {

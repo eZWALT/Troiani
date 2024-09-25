@@ -4,8 +4,13 @@
 #include <string>
 #include <optional>
 #include <set>
+#include <regex>
+#include <iostream>
+#include <filesystem>
+
 #include "Error.h"
 #include "Config.h"
+
 
 class CLIParser {
 

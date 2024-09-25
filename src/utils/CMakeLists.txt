@@ -1,5 +1,5 @@
 #Define the sources
-set(UTILS_SOURCES Config.cpp Error.cpp)
+set(UTILS_SOURCES Config.cpp Error.cpp SourceFile.cpp)
 
 #Create static library
 add_library(utils STATIC ${UTILS_SOURCES})

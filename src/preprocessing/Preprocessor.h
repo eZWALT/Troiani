@@ -1,16 +1,20 @@
 #ifndef PREPROCESSOR_H
 #define PREPROCESSOR_H
 
-#include "Error.h"
 #include <optional>
 #include <string>
+#include <fstream>
+#include <sstream>
+#include <regex>
+
+#include "Error.h"
+#include "SourceFile.h"
 
 class Preprocessor {
 private:
-    std::string file_name;
-    std::string file_contents;
+    SourceFile source_file;
 public:
-    Preprocessor(const std::string& file_name);
+    Preprocessor(SourceFile& source_file);
     std::optional<Error> preprocess();
 
     std::optional<Error> load_file();
@@ -18,6 +22,7 @@ public:
     std::optional<Error> handle_inclusions();
     std::optional<Error> handle_macros();
 
+    SourceFile get_processed_file() const;
     const std::string& get_processed_content() const;
 };
 
