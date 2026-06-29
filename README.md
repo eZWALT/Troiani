@@ -35,7 +35,7 @@
 ## Why Troiani?
 
 - **From Scratch** — Every component, from the tokenizer to the distributed trainer, is built in the open. No hidden sauce.
-- **Modern Architecture** — Troiani combines **LIV**, **Mamba-3**, and **Grouped Query Attention (GQA)** for efficient, multimodal-capable, reasoning-first models.
+- **Modern Architecture** — Troiani combines **Mamba-2** (selective state-space model), **SwiGLU** MLPs, and **Grouped Query Attention (GQA)** for efficient, multimodal-capable, reasoning-first models. Designed for deep, Mamba-dominant hybrids at sub-1B scale.
 - **Radically Open** — Datasets, configs, hyperparameters, and even failure logs are public. The openest LLM model family ever.
 - **Resilient Training** — Designed for checkpoint-driven, interruptible training that survives preempted jobs and cron-scheduled restarts.
 - **Educational** — A reference for anyone who wants to understand how an LLM is built, end-to-end, without wading through a framework.
@@ -45,6 +45,7 @@
 <details>
 <summary><b>Click to expand</b></summary>
 
+- **2026-06-29** — Completed architecture research: landed on **Mamba-2 + sparse GQA** hybrid with SwiGLU MLPs. LIV long-conv evaluated and deferred (Mamba's SSM already provides selective global mixing). See [Architecture](#architecture) section.
 - **2026-06-24** — Published the Troiani v1 roadmap (see [`docs/Troiani-v1-roadmap.md`](docs/Troiani-v1-roadmap.md)).
 - **2026-06-22** — Laid out the minimal repository structure (src, config, docs, research, tests).
 - **2026-06-22** — Initial commit. The journey begins.
@@ -53,13 +54,66 @@
 
 ## Architecture
 
-Troiani v0 targets a modern, efficient, multimodal-ready backbone:
+Troiani v0 is a **Mamba-2-dominant hybrid** with sparse GQA, SwiGLU MLPs, RoPE + YaRN, and tied embeddings. Built to stay under 1B params with room for multimodal adapters. Mamba-3 is planned for a future iteration once released.
+
+### Design rationale
+
+Extensive parameter budgeting across d_model (512–1536), MLP ratios (2.0–4.0), layer counts, and mixing schemes (Mamba/LIV/GQA) led to the following conclusions:
+
+1. **Mamba-2 is the backbone.** Its selective SSM provides input-dependent global mixing in O(L) time — already a superset of what a static long-conv (LIV) offers. Mamba-2's built-in `conv1d` (k=4) and `d_state=128` cover local and global receptive fields.
+
+2. **LIV long-conv is deferred.** LIV duplicates Mamba's global mixing but without selectivity. It only helps early-layer feature extraction on data with fixed/periodic patterns. Net param cost isn't justified for language at sub-1B scale. Revisit if multimodal data shows strong shift-invariant structure.
+
+3. **GQA every 5–6 layers is the sweet spot** (~17–20% attention). Matches the Jamba design philosophy — enough for sharp content retrieval, Mamba dominates the rest.
+
+4. **SwiGLU with ratio 8/3** (LLaMA-style). The gating-optimized default — preserves the capacity of a 4× FFN at lower param cost.
+
+5. **d_model=1024** — wide enough for multimodal fusion (vision/audio features need the capacity), still deep at 36 layers.
+
+### Target config: Troiani-base (~806M)
+
+```
+d_model:           1024
+n_layers:          36  (30 Mamba-2 + 6 GQA)
+layer pattern:     [M M M M M A] × 6   (GQA every 6th, 17% attention)
+MLP:               SwiGLU, ratio 8/3  (hidden = 2731)
+SSM:               Mamba-2 (d_state=128, d_conv=4, expand=2)
+Attention:         GQA (8 query heads, 1 KV head)
+Positional enc:    RoPE + YaRN (for context extension)
+Norm:              RMSNorm
+Embeddings:        Tied (input = output LM head)
+Vocab:             32,000
+
+Base params:       ~806M
++ multimodal       ~60M  (vision Q-Former + audio adapter + router)
+adapters:          ────
+Total:             ~866M  (134M headroom under 1B)
+
+Depth variants:
+  30 layers → 677M base (737M w/ adapters)
+  42 layers → 934M base (994M w/ adapters, max under 1B)
+```
+
+### Per-layer param breakdown (d=1024, SwiGLU ratio 8/3)
+
+| Layer type | Params/layer | Role |
+|------------|-------------|------|
+| Mamba-2    | ~23.6M       | Selective global state-space mixer (dominant) |
+| GQA        | ~10.7M       | Sharp content retrieval, KV-cache efficient |
+| SwiGLU MLP | ~8.4M        | Feedforward non-linearity |
+| RMSNorm    | ~2K          | Per-token normalization |
+
+### Component table
 
 | Component            | Choice                          | Notes                                                         |
 |----------------------|---------------------------------|---------------------------------------------------------------|
-| Sequence Mixer       | **Mamba-3**                     | Selective state-space model for linear-time long-context.    |
-| Attention            | **Grouped Query Attention**     | KV-cache efficient; scales inference without quality loss.   |
-| Vision / Multimodal  | **LIV**                         | Native multimodal fusion from the tokenizer up.              |
+| Sequence Mixer       | **Mamba-2** (Mamba-3 planned)   | Selective SSM, `d_state=128`, linear-time long-context. Will upgrade to Mamba-3 when available. |
+| Attention            | **GQA** (every 6th layer)      | KV-cache efficient; sharp retrieval without quality loss.    |
+| Feedforward          | **SwiGLU** (ratio 8/3)         | LLaMA-style gated MLP, capacity-efficient.                   |
+| Positional Encoding  | **RoPE + YaRN**                | Rotary embeddings with YaRN for context extension.            |
+| Normalization        | **RMSNorm**                    | No mean subtraction, stable in deep stacks.                  |
+| Embeddings           | **Tied**                        | Shared input/output LM head embeddings.                      |
+| Vision / Multimodal  | **Adapters** (future)          | Q-Former + audio projection + modality router (~60M budget). |
 | Tokenizer            | Custom (in development)         | Multimodal + reasoning-aware tokenization by design.         |
 | Training             | HuggingFace + distributed      | Continuous, checkpoint-resumable, cron-friendly.              |
 
@@ -104,11 +158,12 @@ The Troiani v1 roadmap — see [`docs/Troiani-v1-roadmap.md`](docs/Troiani-v1-ro
 - [ ] Create a tokenizer that allows multimodality and reasoning from the get-go
 - [ ] Data preprocessing pipeline validation
 - [ ] Data selection
-- [ ] Research optimal hyperparameters and values for the architecture (LIV + Mamba3 + GQA)
-- [ ] Build and try the architecture (Mamba-3) (inference and train)
+- [x] Research optimal hyperparameters and values for the architecture (Mamba-2 + GQA, SwiGLU 8/3, d=1024, GQA every 6th)
+- [ ] Build and try the architecture (Mamba-2 + GQA) (inference and train)
 - [ ] Create the initial training HF script (test with continuous training of a tiny model)
 - [ ] Refine strategy for constantly interrupted jobs (cronjob / checkpoints) so it will always be training
 - [ ] Get config values for OOM (HF, Academia pretraining...¿?)
+- [ ] Upgrade to Mamba-3 when available
 
 ## Contributing
 
