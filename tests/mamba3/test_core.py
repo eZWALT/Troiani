@@ -26,9 +26,10 @@ class TestSingleMamba3:
         model.eval()
         x = torch.randn(4, 32, mamba3_kwargs["d_model"], device=device, dtype=dtype)
         y = model(x)
+        atol = 1e-2 if dtype == torch.bfloat16 else 1e-5
         for i in range(4):
             single = model(x[i : i + 1])
-            assert torch.allclose(y[i : i + 1], single, atol=1e-5), (
+            assert torch.allclose(y[i : i + 1], single, atol=atol), (
                 f"batch position {i} differs"
             )
 
