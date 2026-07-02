@@ -11,27 +11,31 @@ def build_attention(d_model, n_heads, n_kv, device, dtype):
     """MHA (n_kv=None) or GQA (n_kv < n_heads)."""
     head_dim = d_model // n_heads
     kv_heads = n_kv if n_kv is not None else n_heads
-    return nn.ModuleDict(dict(
-        wq=nn.Linear(d_model, n_heads * head_dim, bias=False),
-        wk=nn.Linear(d_model, kv_heads * head_dim, bias=False),
-        wv=nn.Linear(d_model, kv_heads * head_dim, bias=False),
-        wo=nn.Linear(n_heads * head_dim, d_model, bias=False),
-        _meta=nn.Parameter(torch.tensor([n_heads, kv_heads, head_dim]), requires_grad=False),
-    )).to(device, dtype)
 
+    class AttnLayer(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.wq = nn.Linear(d_model, n_heads * head_dim, bias=False)
+            self.wk = nn.Linear(d_model, kv_heads * head_dim, bias=False)
+            self.wv = nn.Linear(d_model, kv_heads * head_dim, bias=False)
+            self.wo = nn.Linear(n_heads * head_dim, d_model, bias=False)
+            self.n_heads = n_heads
+            self.kv_heads = kv_heads
+            self.head_dim = head_dim
 
-def attention_forward(m, x):
-    B, T, C = x.shape
-    n_heads, kv_heads, head_dim = int(m._meta[0]), int(m._meta[1]), int(m._meta[2])
-    q = m.wq(x).view(B, T, n_heads, head_dim).transpose(1, 2)
-    k = m.wk(x).view(B, T, kv_heads, head_dim).transpose(1, 2)
-    v = m.wv(x).view(B, T, kv_heads, head_dim).transpose(1, 2)
-    if kv_heads != n_heads:
-        k = k.repeat_interleave(n_heads // kv_heads, dim=1)
-        v = v.repeat_interleave(n_heads // kv_heads, dim=1)
-    y = F.scaled_dot_product_attention(q, k, v, is_causal=True)
-    y = y.transpose(1, 2).contiguous().view(B, T, -1)
-    return m.wo(y)
+        def forward(self, x):
+            B, T, C = x.shape
+            q = self.wq(x).view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
+            k = self.wk(x).view(B, T, self.kv_heads, self.head_dim).transpose(1, 2)
+            v = self.wv(x).view(B, T, self.kv_heads, self.head_dim).transpose(1, 2)
+            if self.kv_heads != self.n_heads:
+                k = k.repeat_interleave(self.n_heads // self.kv_heads, dim=1)
+                v = v.repeat_interleave(self.n_heads // self.kv_heads, dim=1)
+            y = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+            y = y.transpose(1, 2).contiguous().view(B, T, -1)
+            return self.wo(y)
+
+    return AttnLayer().to(device, dtype)
 
 
 def build_mamba3(d_model, device, dtype):
@@ -91,7 +95,7 @@ def test_benchmark_attention_vs_mamba3(device, cfg, seq_len):
         torch.cuda.reset_peak_memory_stats()
         return fw, fwbw, p, m
 
-    fw_a, fwbw_a, p_a, m_a = bench(attn, attention_forward)
+    fw_a, fwbw_a, p_a, m_a = bench(attn, lambda m, x: m(x))
     fw_m, fwbw_m, p_m, m_m = bench(mamba, lambda m, x: m(x))
 
     label = f"{kind} {n_heads}h{'x'+str(n_kv)+'kv' if n_kv else ''} d={d_model} L={seq_len}"
