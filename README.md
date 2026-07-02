@@ -58,7 +58,7 @@ Troiani v1 is a Mamba-3-dominant hybrid with sparse GQA. See [`docs/architecture
 | Positional Encoding  | **RoPE + YaRN**              | Rotary embeddings with context extension.                 |
 | Normalization        | **RMSNorm**                  | Stable in deep stacks.                                   |
 | Embeddings           | **Tied**                      | Shared input/output LM head.                             |
-| Target base          | ~806M params                 | Room for ~60M in multimodal adapters.                     |
+| Target base          | ~921M params (d=1088, 36L, vocab 46k) | Room for ~60M in multimodal adapters. |
 
 ## Repository Structure
 
@@ -67,10 +67,12 @@ Troiani/
 ├── config/         # Training and model configuration
 ├── docs/           # Roadmaps and design documents
 │   ├── architecture.md
+│   ├── setup.md
 │   └── Troiani-v1-roadmap.md
 ├── research/       # Research notes and experiments
 ├── src/
 │   ├── data/           # Data loading and preprocessing
+│   │   └── tokenizer.py   # BPE tokenizer trainer
 │   ├── evaluation/     # Benchmarks and evaluation harness
 │   ├── models/         # Model architecture definitions
 │   ├── pipelines/      # End-to-end data and training pipelines

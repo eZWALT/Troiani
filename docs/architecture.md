@@ -14,43 +14,43 @@ Extensive parameter budgeting across d_model (512-1536), MLP ratios (2.0-4.0), l
 
 4. **SwiGLU with ratio 8/3** (LLaMA-style). The gating-optimized default - preserves the capacity of a 4x FFN at lower param cost.
 
-5. **d_model=1024** - wide enough for multimodal fusion (vision/audio features need the capacity), still deep at 36 layers.
+5. **d_model=1088** - wider than 1024 for better per-layer representational capacity, still 36 layers deep under 1B. GQA every 6 gives 30 Mamba-3 + 6 GQA.
 
-## Target Config: Troiani-base (~806M)
+## Target Config: Troiani-base (~921M)
 
 ```
-d_model:           1024
+d_model:           1088
 n_layers:          36  (30 Mamba-3 + 6 GQA)
 layer pattern:     [M M M M M A] x 6   (GQA every 6th, 17% attention)
-MLP:               SwiGLU, ratio 8/3  (hidden = 2731)
+MLP:               SwiGLU, ratio 8/3  (hidden = 2901)
 SSM:               Mamba-3 (d_state=128, d_conv=4, expand=2)
 Attention:         GQA (8 query heads, 1 KV head)
 Positional enc:    RoPE + YaRN (for context extension)
 Norm:              RMSNorm
 Embeddings:        Tied (input = output LM head)
-Vocab:             32,000
+Vocab:             46,000
 
-Base params:       ~806M
+Base params:       ~921M
 + multimodal       ~60M  (vision Q-Former + audio adapter + router)
 adapters:          ----
-Total:             ~866M  (134M headroom under 1B)
+Total:             ~981M  (19M headroom under 1B)
 ```
 
-### Depth Variants
+### Vocab Variants (36 layers)
 
-| Layers | Pattern         | Base Params | + Adapters | Notes                     |
-|--------|-----------------|-------------|------------|---------------------------|
-| 30     | MMMMMA x 5      | 677M        | 737M       | Light, fast, roomy        |
-| 36     | MMMMMA x 6      | 806M        | 866M       | Sweet spot (recommended)  |
-| 42     | MMMMMA x 7      | 934M        | 994M       | Max depth under 1B        |
+| Vocab  | Embedding | Base Params | + Adapters | Room   |
+|--------|-----------|-------------|------------|--------|
+| 32,000 | 34.8M     | 906M        | 966M       | 34M    |
+| 46,000 | 50.1M     | 921M        | 981M       | 19M    |
+| 54,000 | 58.8M     | 930M        | 990M       | 10M    |
 
-## Per-Layer Param Breakdown (d=1024, SwiGLU ratio 8/3)
+## Per-Layer Param Breakdown (d=1088, SwiGLU ratio 8/3)
 
 | Layer type | Params/layer | Role |
 |------------|-------------|------|
-| Mamba-3    | ~23.6M       | Selective global state-space mixer (dominant) |
-| GQA        | ~10.7M       | Sharp content retrieval, KV-cache efficient |
-| SwiGLU MLP | ~8.4M        | Feedforward non-linearity |
+| Mamba-3    | ~26.6M       | Selective global state-space mixer (dominant) |
+| GQA        | ~12.1M       | Sharp content retrieval, KV-cache efficient |
+| SwiGLU MLP | ~9.5M        | Feedforward non-linearity |
 | RMSNorm    | ~2K          | Per-token normalization |
 
 ## Component Table

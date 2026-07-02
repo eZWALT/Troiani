@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "troiani"
+version = "0.1.0"
+description = "Troiani: The Openest sub-billion LLM Model Family Built From Scratch (Mamba 3)"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+
+authors = [
+  { name = "eZWALT" },
+]
+
+dependencies = [
+  "torch>=2.0.0",
+  "tokenizers>=0.15.0",
+  "transformers>=4.35.0",
+  "datasets>=2.14.0",
+  "sentencepiece>=0.1.99",
+  "numpy>=1.24.0",
+  "tqdm>=4.65.0",
+  "wandb>=0.15.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0.0",
+  "black>=23.0.0",
+  "ruff>=0.1.0",
+  "mypy>=1.6.0",
+]
+
+[tool.troiani]
+vocab_size = 46000
+d_model = 1088
+n_layers = 36
+gqa_every = 6
+mlp_ratio = "8/3"
