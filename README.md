@@ -1,7 +1,7 @@
 <div align="center">
 
   <a href="https://github.com/eZWALT/Troiani">
-    <img src="resources/troiani_logo_transparent.png" alt="Troiani" width="350"/>
+    <img src="resources/troiani_logo_white.png" alt="Troiani" width="350"/>
   </a>
 
   <h1>Troiani</h1>
