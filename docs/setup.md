@@ -5,27 +5,7 @@
 - Linux, NVIDIA GPU, CUDA 11.6+
 - Python 3.10+ (3.14 recommended via pyenv/conda)
 
-## Git sync (if you already cloned on this machine)
-
-If the repo already exists and is behind, reconcile like this:
-
-```bash
-cd /home/wtroi/Troiani          # or wherever you cloned it
-
-# Save any local work you want to keep
-git stash
-
-# Reset to match GitHub exactly
-git fetch origin
-git checkout main
-git reset --hard origin/main
-git clean -fd
-
-# Pull the latest
-git pull origin main
-```
-
-If you're cloning fresh:
+## Clone
 
 ```bash
 git clone https://github.com/eZWALT/Troiani.git
