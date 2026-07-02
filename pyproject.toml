@@ -41,3 +41,9 @@ dev = [
   "ruff>=0.1.0",
   "mypy>=1.6.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "cuda: marks tests that require CUDA (deselect with '-m \"not cuda\"')",
+]
