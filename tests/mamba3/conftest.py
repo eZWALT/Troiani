@@ -13,11 +13,11 @@ def device() -> torch.device:
     return torch.device("cuda")
 
 
-def _warmup_mamba3(dtype):
-    """Create a tiny Mamba3 and run one forward to trigger Triton JIT compilation."""
+def _warmup_mamba3(dtype, d_model=128):
+    """Warmup Triton with the same kernel config used in tests."""
     from mamba_ssm import Mamba3
-    m = Mamba3(d_model=64, d_state=16, expand=2, headdim=64, ngroups=1, device="cuda", dtype=dtype)
-    x = torch.randn(1, 32, 64, device="cuda", dtype=dtype)
+    m = Mamba3(d_model=d_model, d_state=16, expand=2, headdim=64, ngroups=1, device="cuda", dtype=dtype)
+    x = torch.randn(1, 32, d_model, device="cuda", dtype=dtype)
     y = m(x)
     y.mean().backward()
     del m, x, y
