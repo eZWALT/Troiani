@@ -52,7 +52,7 @@ Troiani v1 is a Mamba-3-dominant hybrid with sparse GQA. See [`docs/architecture
 
 | Component            | Choice                        | Notes                                                     |
 |----------------------|-------------------------------|-----------------------------------------------------------|
-| Sequence Mixer       | **Mamba-3**                   | Selective SSM, d_state=128, linear-time long-context.    |
+| Sequence Mixer       | **Mamba-3**                   | Selective SSM, d_state=128. Official: [state-spaces/mamba](https://github.com/state-spaces/mamba). |
 | Attention            | **GQA** (every 6th layer)    | KV-cache efficient, sharp retrieval.                     |
 | Feedforward          | **SwiGLU** (ratio 8/3)       | LLaMA-style gated MLP.                                   |
 | Positional Encoding  | **RoPE + YaRN**              | Rotary embeddings with context extension.                 |

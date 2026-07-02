@@ -57,7 +57,7 @@ Total:             ~981M  (19M headroom under 1B)
 
 | Component            | Choice                        | Notes                                                     |
 |----------------------|-------------------------------|-----------------------------------------------------------|
-| Sequence Mixer       | **Mamba-3**                   | Selective SSM, d_state=128, linear-time long-context.    |
+| Sequence Mixer       | **Mamba-3**                   | Selective SSM, d_state=128, headdim=64, MIMO rank 4. Official repo: [state-spaces/mamba](https://github.com/state-spaces/mamba). |
 | Attention            | **GQA** (every 6th layer)    | KV-cache efficient; sharp retrieval without quality loss.|
 | Feedforward          | **SwiGLU** (ratio 8/3)       | LLaMA-style gated MLP, capacity-efficient.               |
 | Positional Encoding  | **RoPE + YaRN**              | Rotary embeddings with YaRN for context extension.        |
