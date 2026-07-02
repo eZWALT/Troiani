@@ -32,21 +32,23 @@ python -c "import torch; print(f'torch {torch.__version__}, cuda {torch.version.
 
 ## Environment setup
 
-### Option A: pyenv (recommended)
+### Conda (from environment.yml)
+
+```bash
+conda env create -f environment.yml
+conda activate troiani
+pip install uv
+uv pip install -e ".[dev]"
+```
+
+### pyenv
+
+`.python-version` file is provided in the repo for automatic version switching:
 
 ```bash
 pip install uv
 pyenv virtualenv 3.14 troiani
 pyenv local troiani
-uv pip install -e ".[dev]"
-```
-
-### Option B: conda
-
-```bash
-conda create -n troiani python=3.14
-conda activate troiani
-pip install uv
 uv pip install -e ".[dev]"
 ```
 
