@@ -1,6 +1,6 @@
-# Troiani v0 Architecture
+# Troiani v1 Architecture
 
-Troiani v0 is a **Mamba-3-dominant hybrid** with sparse GQA, SwiGLU MLPs, RoPE + YaRN, and tied embeddings. Built to stay under 1B params with room for multimodal adapters.
+Troiani v1 is a **Mamba-3-dominant hybrid** with sparse GQA, SwiGLU MLPs, RoPE + YaRN, and tied embeddings. Built to stay under 1B params with room for multimodal adapters.
 
 ## Design Rationale
 

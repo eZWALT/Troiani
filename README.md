@@ -30,7 +30,7 @@
 
 ---
 
-> **The Troiani Model Family (v0)** - a cookbook, recipe book, and full source tree for training language models from scratch. Tokenizer, architecture, data pipeline, trainer, and eval harness - all open, all hackable.
+> **The Troiani Model Family (v1)** - a cookbook, recipe book, and full source tree for training language models from scratch. Tokenizer, architecture, data pipeline, trainer, and eval harness - all open, all hackable.
 
 ## Why Troiani?
 
@@ -48,7 +48,7 @@
 
 ## Architecture
 
-Troiani v0 is a Mamba-3-dominant hybrid with sparse GQA. See [`docs/architecture.md`](docs/architecture.md) for full details.
+Troiani v1 is a Mamba-3-dominant hybrid with sparse GQA. See [`docs/architecture.md`](docs/architecture.md) for full details.
 
 | Component            | Choice                        | Notes                                                     |
 |----------------------|-------------------------------|-----------------------------------------------------------|
