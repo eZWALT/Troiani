@@ -15,15 +15,23 @@ authors = [
 ]
 
 dependencies = [
-  "torch>=2.0.0",
-  "causal-conv1d>=1.4.0",
+  "torch",
+  "transformers",
+  "causal-conv1d>=1.2.0",
+  "tilelang==0.1.8",
+  "apache-tvm-ffi<=0.1.9",
+  "quack-kernels>=0.3.4",
+  "triton>=3.5.0",
+  "ninja",
+  "einops",
+  "packaging",
   "tokenizers>=0.15.0",
-  "transformers>=4.35.0",
   "datasets>=2.14.0",
   "sentencepiece>=0.1.99",
   "numpy>=1.24.0",
   "tqdm>=4.65.0",
   "wandb>=0.15.0",
+  "setuptools>=61.0.0",
 ]
 
 [project.optional-dependencies]
