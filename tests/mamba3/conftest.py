@@ -2,16 +2,37 @@ import pytest
 import torch
 
 
-@pytest.fixture
+def pytest_configure(config):
+    config.addinivalue_line("markers", "cuda: marks tests that require CUDA")
+
+
+@pytest.fixture(scope="session")
 def device() -> torch.device:
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    pytest.skip("CUDA not available")
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
+    return torch.device("cuda")
+
+
+def _warmup_mamba3(dtype):
+    """Create a tiny Mamba3 and run one forward to trigger Triton JIT compilation."""
+    from mamba_ssm import Mamba3
+    m = Mamba3(d_model=64, d_state=16, expand=2, headdim=64, ngroups=1, device="cuda", dtype=dtype)
+    x = torch.randn(1, 32, 64, device="cuda", dtype=dtype)
+    y = m(x)
+    y.mean().backward()
+    del m, x, y
+
+
+_warmup_done = set()
 
 
 @pytest.fixture(params=[torch.float32, torch.bfloat16])
 def dtype(request) -> torch.dtype:
-    return request.param
+    dt = request.param
+    if dt not in _warmup_done:
+        _warmup_mamba3(dt)
+        _warmup_done.add(dt)
+    return dt
 
 
 @pytest.fixture
