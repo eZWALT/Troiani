@@ -1,14 +1,13 @@
-"""Benchmark Mamba-3 vs MHA vs GQA at realistic configs."""
+"""Benchmark Mamba-1/2/3 vs MHA vs GQA at realistic configs."""
 import time
 import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from mamba_ssm import Mamba3
+from mamba_ssm import Mamba, Mamba2, Mamba3
 
 
 def build_attention(d_model, n_heads, n_kv, device, dtype):
-    """MHA (n_kv=None) or GQA (n_kv < n_heads)."""
     head_dim = d_model // n_heads
     kv_heads = n_kv if n_kv is not None else n_heads
 
@@ -38,47 +37,55 @@ def build_attention(d_model, n_heads, n_kv, device, dtype):
     return AttnLayer().to(device, dtype)
 
 
-def build_mamba3(d_model, device, dtype):
-    return Mamba3(
-        d_model=d_model, d_state=128, expand=2, headdim=64,
-        ngroups=1, device=device, dtype=dtype,
-    )
+def build_mamba(d_model, version, device, dtype):
+    kwargs = dict(d_model=d_model, d_state=128, expand=2, d_conv=4,
+                  device=device, dtype=dtype)
+    if version == 1:
+        return Mamba(**kwargs)
+    elif version == 2:
+        return Mamba2(**kwargs, headdim=64, ngroups=1, chunk_size=256)
+    elif version == 3:
+        return Mamba3(**kwargs, headdim=64, ngroups=1, chunk_size=64)
 
 
 CONFIGS = [
-    pytest.param(dict(d_model=1024, n_heads=16, n_kv=None), id="MHA-16h-d1024"),
-    pytest.param(dict(d_model=1024, n_heads=16, n_kv=4),   id="GQA-16h4kv-d1024"),
-    pytest.param(dict(d_model=2048, n_heads=32, n_kv=None), id="MHA-32h-d2048"),
-    pytest.param(dict(d_model=2048, n_heads=32, n_kv=8),   id="GQA-32h8kv-d2048"),
+    pytest.param(dict(d_model=1024, n_heads=16, n_kv=None, kind="MHA-16h"),       id="MHA-16h-d1024"),
+    pytest.param(dict(d_model=1024, n_heads=16, n_kv=4,   kind="GQA-16hx4kv"),    id="GQA-16h4kv-d1024"),
+    pytest.param(dict(d_model=1088, n_heads=17, n_kv=1,   kind="GQA-17hx1kv"),    id="GQA-17h1kv-d1088"),
+    pytest.param(dict(d_model=2048, n_heads=32, n_kv=None, kind="MHA-32h"),       id="MHA-32h-d2048"),
+    pytest.param(dict(d_model=2048, n_heads=32, n_kv=8,   kind="GQA-32hx8kv"),    id="GQA-32h8kv-d2048"),
 ]
 
 
 @pytest.mark.benchmark
 @pytest.mark.parametrize("cfg", CONFIGS)
 @pytest.mark.parametrize("seq_len", [512, 2048])
-def test_benchmark_attention_vs_mamba3(device, cfg, seq_len):
+def test_benchmark_all(device, cfg, seq_len):
     dtype = torch.bfloat16
     batch = 2
     d_model = cfg["d_model"]
     n_heads = cfg["n_heads"]
     n_kv = cfg["n_kv"]
-    kind = "MHA" if n_kv is None else "GQA"
+    kind = cfg["kind"]
 
     attn = build_attention(d_model, n_heads, n_kv, device, dtype)
-    mamba = build_mamba3(d_model, device, dtype)
+    m1 = build_mamba(d_model, 1, device, dtype)
+    m2 = build_mamba(d_model, 2, device, dtype)
+    m3 = build_mamba(d_model, 3, device, dtype)
+
     x = torch.randn(batch, seq_len, d_model, device=device, dtype=dtype)
     warmup, iters = 3, 20
 
-    def bench(model, forward_fn):
+    def bench(model):
         for _ in range(warmup):
-            forward_fn(model, x).mean().backward()
+            model(x).mean().backward()
         torch.cuda.synchronize()
 
         model.zero_grad()
         torch.cuda.synchronize()
         t = time.time()
         for _ in range(iters):
-            forward_fn(model, x)
+            model(x)
         torch.cuda.synchronize()
         fw = (time.time() - t) / iters * 1000
 
@@ -86,21 +93,29 @@ def test_benchmark_attention_vs_mamba3(device, cfg, seq_len):
         torch.cuda.synchronize()
         t = time.time()
         for _ in range(iters):
-            forward_fn(model, x).mean().backward()
+            model(x).mean().backward()
         torch.cuda.synchronize()
         fwbw = (time.time() - t) / iters * 1000
 
         p = sum(p.numel() for p in model.parameters())
         m = torch.cuda.max_memory_allocated() / 1e6
         torch.cuda.reset_peak_memory_stats()
-        return fw, fwbw, p, m
+        tok_s = int(batch * seq_len / (fw / 1000))
+        return fw, fwbw, tok_s, p, m
 
-    fw_a, fwbw_a, p_a, m_a = bench(attn, lambda m, x: m(x))
-    fw_m, fwbw_m, p_m, m_m = bench(mamba, lambda m, x: m(x))
+    results = {}
+    for label, model in [("Attention", attn), ("Mamba-1", m1), ("Mamba-2", m2), ("Mamba-3", m3)]:
+        results[label] = bench(model)
 
-    label = f"{kind} {n_heads}h{'x'+str(n_kv)+'kv' if n_kv else ''} d={d_model} L={seq_len}"
+    label = f"{kind} d={d_model} L={seq_len}"
     print(f"\n{label}")
-    print(f"  {'':>12s} {'fw(ms)':>8s} {'fwbw(ms)':>8s} {'tok/s':>10s} {'params':>8s} {'mem(MB)':>8s}")
-    print(f"  {'Attention':>12s} {fw_a:>8.1f} {fwbw_a:>8.1f} {int(batch*seq_len/(fw_a/1000)):>10,} {p_a:>8,} {m_a:>8.0f}")
-    print(f"  {'Mamba-3':>12s} {fw_m:>8.1f} {fwbw_m:>8.1f} {int(batch*seq_len/(fw_m/1000)):>10,} {p_m:>8,} {m_m:>8.0f}")
-    print(f"  {'Ratio(A/M)':>12s} {fw_a/fw_m:>8.2f}x {fwbw_a/fwbw_m:>8.2f}x")
+    print(f"  {'':>12s} {'fw(ms)':>8s} {'fwbw(ms)':>8s} {'tok/s':>10s} {'params':>9s} {'mem(MB)':>8s}")
+    for k in ["Attention", "Mamba-1", "Mamba-2", "Mamba-3"]:
+        r = results[k]
+        print(f"  {k:>12s} {r[0]:>8.1f} {r[1]:>8.1f} {r[2]:>10,} {r[3]:>9,} {r[4]:>8.0f}")
+    # Ratios relative to Mamba-3
+    m3 = results["Mamba-3"]
+    print(f"  {'Ratio v3':>12s} {'fw':>8s} {'fwbw':>8s} {'tok/s':>10s}")
+    for k in ["Attention", "Mamba-1", "Mamba-2"]:
+        r = results[k]
+        print(f"  {f'{k}/M3':>12s} {r[0]/m3[0]:>8.2f}x {r[1]/m3[1]:>8.2f}x {r[2]/m3[2]:>8.2f}x")
