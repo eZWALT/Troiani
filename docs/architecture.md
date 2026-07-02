@@ -20,6 +20,7 @@ Extensive parameter budgeting across d_model (512-1536), MLP ratios (2.0-4.0), l
 
 ```
 d_model:           1088
+vocab_size:        50032  (50000 tokens + 32 special)
 n_layers:          36  (30 Mamba-3 + 6 GQA)
 layer pattern:     [M M M M M A] x 6   (GQA every 6th, 17% attention)
 MLP:               SwiGLU, ratio 8/3  (hidden = 2901)

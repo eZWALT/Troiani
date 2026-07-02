@@ -71,14 +71,14 @@ m = Mamba3(d_model=1088, d_state=128, headdim=64,
            is_mimo=True, mimo_rank=4, chunk_size=16, dtype=torch.bfloat16)
 print(f'Mamba-3 OK: {sum(p.numel() for p in m.parameters())/1e6:.1f}M params')
 "
-python -c "from troiani.data.tokenizer import create_tokenizer; print('troiani.data OK')"
+python -c "from troiani.tokenizer import TroianiTokenizer; print('troiani.tokenizer OK')"
 ```
 
 ## Usage
 
 ```bash
 pyenv activate troiani   # or: conda activate troiani
-python -m troiani.data.tokenizer --input data/*.txt --vocab-size 46000
+python -m troiani.tokenizer.tokenizer --input data/*.txt --vocab-size 46000
 ```
 
 ## Version notes
@@ -86,4 +86,4 @@ python -m troiani.data.tokenizer --input data/*.txt --vocab-size 46000
 - Mamba-3 requires `tilelang==0.1.8`, `triton>=3.5.0`, `quack-kernels>=0.3.4` (all in pyproject.toml)
 - `causal-conv1d>=1.2.0` is listed as optional in mamba repo but included here for convenience
 - All model configs assume tied embeddings
-- Vocab sizes tested: 32k, 46k, 54k. Default is 46k
+- Vocab sizes tested: 32k, 46k, 54k. Final target: 50032 (50000 + 32 special tokens)
