@@ -48,7 +48,3 @@ markers = [
   "cuda: marks tests that require CUDA (deselect with '-m \"not cuda\"')",
   "benchmark: throughput/memory benchmarks (skipped by default; run with '-m benchmark')",
 ]
-
-filterwarnings = [
-  "ignore::DeprecationWarning:tilelang.*",
-]

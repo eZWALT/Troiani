@@ -69,23 +69,24 @@ Single-layer throughput on **NVIDIA A100 40GB** with **torch.bfloat16**. All mod
 
 ## Sequence Length Scaling (d_model=1088, bs=1)
 
-Single-layer GQA (17hx1kv) vs Mamba-3 pushed to OOM on A100 40GB:
+Single-layer GQA (17hx1kv), Mamba-2, and Mamba-3 pushed to OOM on A100 40GB:
 
-| Length | GQA fw | M3 fw | GQA bwd | M3 bwd | GQA mem | M3 mem | fw gap | bwd gap |
-|---|---|---|---|---|---|---|---|---|
-| 512 | 0.2ms | 1.7ms | 0.9ms | 3.8ms | 53MB | 365MB | 0.12x | 0.23x |
-| 2048 | 0.5ms | 3.2ms | 1.5ms | 7.5ms | 99MB | 249MB | 0.14x | 0.20x |
-| 8192 | 1.3ms | 4.8ms | 4.3ms | 12.0ms | 222MB | 830MB | 0.27x | 0.36x |
-| 16384 | 4.2ms | 8.7ms | 16.1ms | 21.2ms | 385MB | 1.6GB | 0.49x | 0.76x |
-| **32768** | **16.7ms** | **16.6ms** | **59.5ms** | **41.1ms** | 712MB | 3.1GB | **1.00x** | **1.45x** |
-| 65536 | 63.0ms | 32.9ms | 230.1ms | 83.0ms | 1.4GB | 6.2GB | 1.91x | 2.77x |
-| 131072 | 253.1ms | OOM | 910.9ms | OOM | 2.7GB | OOM | - | - |
+| Length | GQA fw | M2 fw | M3 fw | GQA bwd | M2 bwd | M3 bwd | GQA mem | M2 mem | M3 mem |
+|---|---|---|---|---|---|---|---|---|---|
+| 512 | 0.2ms | 1.1ms | 1.7ms | 0.8ms | 4.3ms | 3.8ms | 68MB | 376MB | 394MB |
+| 2048 | 0.7ms | 3.8ms | 4.4ms | 2.4ms | 14.3ms | 12.2ms | 128MB | 234MB | 279MB |
+| 8192 | 1.3ms | 3.9ms | 5.0ms | 4.3ms | 16.1ms | 13.0ms | 251MB | 619MB | 859MB |
+| 16384 | 4.3ms | 3.0ms | 8.6ms | 16.5ms | 14.2ms | 21.1ms | 415MB | 1.1GB | 1.6GB |
+| **32768** | **16.9ms** | **5.9ms** | **16.7ms** | **60.8ms** | **19.4ms** | **41.6ms** | 742MB | 2.2GB | 3.1GB |
+| 65536 | 64.0ms | 12.2ms | 33.3ms | 235ms | 39.2ms | 83.0ms | 1.4GB | 4.3GB | 6.2GB |
+| 131072 | 259ms | **24.1ms** | OOM | 928ms | 78.3ms | OOM | 2.7GB | 8.6GB | OOM |
+| 262144 | 1.09s | OOM | OOM | 3.74s | OOM | OOM | 5.3GB | OOM | OOM |
 
-> **Crossover at L≈32k**: Mamba-3's O(L) scaling overtakes FlashAttention's cuDNN-optimized O(L²). At 65k Mamba-3 is **1.9× faster** fwd, **2.8× faster** bwd.
+> **Mamba-2 overtakes GQA at L≈8k**, Mamba-3 at L≈32k. Mamba-2 is the throughput king at long sequences — **10.7× faster than GQA at 131k** (24ms vs 259ms).
 >
-> **Memory tradeoff**: Mamba-3 uses 4-5× more memory per layer at long sequences because the SSM state materializes O(L × d_state × d_inner) for backprop. FlashAttention tiles the attention computation, keeping memory low.
+> **Memory ranking**: GQA ≪ Mamba-2 < Mamba-3. GQA's flash attention tiles the O(L²) compute, keeping memory at 5.3GB even at 262k. Mamba-2 OOMs at 262k (8.6GB at 131k), Mamba-3 OOMs at 131k.
 >
-> **Mamba-3 OOM at 131k** on 40GB (single layer with d_state=128, expand=2). GQA is still alive at 131k using only 2.7GB thanks to flash attention tiling.
+> **Mamba-2 vs Mamba-3**: Mamba-2 is 2-3× faster and uses ~50% less memory at all lengths. For long-context training, Mamba-2 is the better SSM choice.
 
 ---
 
@@ -93,14 +94,12 @@ Single-layer GQA (17hx1kv) vs Mamba-3 pushed to OOM on A100 40GB:
 
 1. **Attention (MHA/GQA)** is 4-11× faster in tok/s than Mamba-3 at short sequences (512-2048). At these lengths FlashAttention's cuDNN-optimized kernels dominate.
 
-2. **Mamba-3 overtakes attention at L≈32768** due to O(L) vs O(L²) scaling. At 65536, Mamba-3 is **1.9× faster forward** and **2.8× faster backward**.
+2. **Mamba-2 overtakes attention at L≈8k**, Mamba-3 at L≈32k. Mamba-2 is the throughput king at long sequences — **10.7× faster than GQA at 131k**.
 
-3. **Mamba-1 is the fastest SSM variant** (1.5× Mamba-3 at target config) — simplest architecture, least kernel overhead. However, Mamba-1 uses `d_state=16` by default vs `d_state=128` in Mamba-2/3 (we benchmarked all at d_state=128 for fair comparison).
+3. **Mamba-2 is 2-3× faster than Mamba-3** at all lengths and uses ~50% less memory. For long-context scenarios, Mamba-2 is the better SSM choice from a performance standpoint.
 
-4. **Mamba-2 and Mamba-3 are comparable** at long sequences (2048). Mamba-3 has slightly slower forward but comparable backward due to the fused kernel optimizations.
+4. **Mamba-1 is the fastest SSM variant at short sequences** (1.5× Mamba-3 at d=1088 L=2048) — simplest architecture, least kernel overhead. Benchmark uses d_state=128 for all.
 
-5. **Mamba-2 forward is surprisingly fast at d=2048 L=2048** (1.5ms vs 4.9ms for Mamba-1). This suggests Mamba-2's chunked scan kernel is particularly efficient at larger dimensions.
+5. **Memory ranking**: GQA ≪ Mamba-1 < Mamba-2 < Mamba-3. GQA FlashAttention tiles O(L²) compute, keeping memory at 5.3GB even at 262k tokens. Mamba-2 OOMs at 262k, Mamba-3 at 131k on A100 40GB.
 
-6. **Mamba-3 memory is highest** — the SSM state materializes O(L × d_state × d_inner) activations, while FlashAttention tiles the computation. Mamba-3 OOMs at 131k tokens on A100 40GB (single layer), GQA still works at 2.7GB.
-
-7. **Tradeoff**: At our target seq_len (2048-8192), GQA is faster and more memory efficient. Mamba-3's value is **quality per param** — fewer Mamba-3 layers can match more attention layers in perplexity, making total training faster despite higher per-layer cost.
+6. **For our target seq_len (2048–8192)**: GQA is fastest and most memory-efficient. Mamba-2 is competitive for longer-context fine-tuning. Mamba-3's value is **quality per param** — the paper claims fewer Mamba-3 layers match more attention layers in perplexity, potentially making total training faster despite higher per-layer cost.
