@@ -41,14 +41,3 @@ dev = [
   "ruff>=0.1.0",
   "mypy>=1.6.0",
 ]
-
-[tool.troiani]
-vocab_size = 46000
-d_model = 1088
-n_layers = 36
-gqa_every = 6
-mlp_ratio = "8/3"
-mamba_version = "mamba3"
-d_state = 128
-headdim = 64
-mimo_rank = 4
