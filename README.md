@@ -85,12 +85,15 @@ Troiani/
 
 ## Install
 
-The Troiani model family is under active development and is installed from source:
+See [`docs/setup.md`](docs/setup.md) for environment setup with pyenv or conda (Python 3.14 recommended).
+
+Quick start:
 
 ```bash
 git clone https://github.com/eZWALT/Troiani.git
 cd Troiani
-pip install -e .
+pip install uv
+uv pip install -e ".[dev]"
 ```
 
 ## Usage
