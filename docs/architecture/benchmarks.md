@@ -167,3 +167,22 @@ For our target **d_model=1088, L=2048-8192, 36 layers:**
 - **Memory**: `torch.cuda.max_memory_allocated()` reset before each test
 - **Configuration consistency**: Mamba-2 uses `chunk_size=256`, Mamba-3 uses `chunk_size=64`, both with `expand=2, headdim=64, ngroups=1`
 - **MIMO mode**: Excluded — `is_mimo=True` requires shared memory >224KB, exceeding A100's 164KB max. Requires H100 or newer GPU.
+
+---
+
+## 7. MoE Routing Comparison
+
+Small-scale benchmark: **d_model=256, 4 experts, hidden=768, 500 steps** on random token prediction.
+
+| Metric | Top-2 + load-balancing | Expert Choice | Winner |
+|---|---|---|---|
+| Final CE | 6.94 | 6.94 | Tie (random data) |
+| **Speed** | **11.8s** | **7.0s** | **EC 1.7× faster** |
+| Expert balance | 24/27/24/25% | 25/25/25/25% | EC (perfect) |
+| Aux loss needed | Yes (CV coefficient) | No (by design) | EC |
+
+> **Expert Choice is 1.7× faster** because dispatch is simpler — `index_add_` per expert vs masked scatter/gather with weighted averaging in Top-2.
+>
+> **Expert Choice has perfect load balance by construction** — each expert picks exactly k tokens. No auxiliary loss needed.
+>
+> **Recommendation**: Use **Expert Choice routing** for our MoE architecture. Faster, perfectly balanced, fewer hyperparameters.
