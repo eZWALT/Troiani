@@ -8,7 +8,7 @@ import torch.optim as optim
 
 # ─── helpers ───────────────────────────────────────────────────────
 
-device = torch.device("cuda:1")
+device = torch.device("cuda")
 
 
 def rms_norm(x, weight, eps=1e-6):
