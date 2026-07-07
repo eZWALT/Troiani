@@ -8,7 +8,7 @@ import torch.optim as optim
 
 # ─── helpers ───────────────────────────────────────────────────────
 
-device = torch.device("cuda")
+device = torch.device("cuda:1")
 
 
 def rms_norm(x, weight, eps=1e-6):
@@ -165,9 +165,9 @@ def build_configs():
         # tag, d, L, dtype, build_fn
         ("GQA+MoE-6E-2x", 1024, 22, torch.float32, lambda d: [MoEBlock(d, 16, 4, 6, 2*d) for _ in range(22)]),
         ("Dense-GQA",     1024, 80, torch.bfloat16, lambda d: [DenseGQABlock(d, 16, 4, int(8/3*d)) for _ in range(80)]),
-        ("Mamba2",        1280, 60, torch.bfloat16, lambda d: [Mamba2Block(d, d_state=64) for _ in range(60)]),
+        ("Mamba2",        1024, 86, torch.bfloat16, lambda d: [Mamba2Block(d, d_state=64) for _ in range(86)]),
         ("M2+MoE-4E",     768,  54, torch.float32, lambda d: [MoEBlock(d, 16, 4, 4, 2*d) for _ in range(54)]),
-        ("Mamba3",        1280, 54, torch.bfloat16, lambda d: [Mamba3Block(d, d_state=64) for _ in range(54)]),
+        ("Mamba3",        1024, 74, torch.bfloat16, lambda d: [Mamba3Block(d, d_state=64) for _ in range(74)]),
     ]
 
 
@@ -196,6 +196,7 @@ def main():
             logits = model(x)
             loss = F.cross_entropy(logits.view(-1, V), y.view(-1))
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step(); opt.zero_grad()
 
         torch.cuda.synchronize()
@@ -209,6 +210,7 @@ def main():
             logits = model(x)
             loss = F.cross_entropy(logits.view(-1, V), y.view(-1))
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step(); opt.zero_grad()
             losses.append(loss.item())
         torch.cuda.synchronize()
