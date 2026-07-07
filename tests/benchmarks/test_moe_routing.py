@@ -1,5 +1,5 @@
 """Compare Top-2 vs Expert Choice routing convergence."""
-import time, math
+import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -17,7 +17,7 @@ class MoETransformer(nn.Module):
         self.moe = MoELayer(d_model, hidden, n_experts, routing=routing)
         self.norm = nn.RMSNorm(d_model)
         self.lm_head = nn.Linear(d_model, vocab, bias=False)
-        self.embed.weight = self.lm_head.weight  # tied
+        self.embed.weight = self.lm_head.weight
 
     def forward(self, x):
         h = self.embed(x)
@@ -25,6 +25,23 @@ class MoETransformer(nn.Module):
         h = self.norm(h)
         logits = self.lm_head(h)
         return logits, aux
+
+
+def expert_utilization(model, vocab=1024):
+    device = next(model.parameters()).device
+    model.eval()
+    x = torch.randint(0, vocab, (4, 128), device=device)
+    with torch.no_grad():
+        h = model.embed(x)
+        if model.moe.routing == "top2":
+            _, idx, _ = model.moe.router(h)
+            counts = F.one_hot(idx, model.moe.n_experts).float().sum(dim=(0, 1, 2))
+        else:
+            _, idx, _ = model.moe.router(h)
+            counts = torch.zeros(model.moe.n_experts, device=device)
+            for e in range(model.moe.n_experts):
+                counts[e] = idx[:, e].unique().numel()
+    return counts / counts.sum()
 
 
 def train_step(model, opt, x, y, aux_coeff=0.01):
@@ -36,20 +53,6 @@ def train_step(model, opt, x, y, aux_coeff=0.01):
     loss.backward()
     opt.step()
     return ce.item(), aux_loss.item()
-
-
-def expert_utilization(model):
-    model.eval()
-    x = torch.randint(0, 1024, (4, 128))
-    with torch.no_grad():
-        h = model.embed(x)
-        if model.moe.routing == "top2":
-            _, idx, _ = model.moe.router(h)
-            counts = F.one_hot(idx, model.moe.n_experts).float().sum(dim=(0, 1, 2))
-        else:
-            _, idx, _ = model.moe.router(h)
-            counts = F.one_hot(idx, model.moe.n_experts).float().sum(dim=(0, 1))
-    return counts / counts.sum()
 
 
 d_model = 256
@@ -70,7 +73,7 @@ for routing in ["top2", "expert_choice"]:
     model = MoETransformer(d_model, n_experts, hidden, routing).to(device)
     opt = optim.AdamW(model.parameters(), lr=lr)
 
-    ce_vals, aux_vals, times = [], [], []
+    ce_vals, aux_vals = [], []
     t0 = time.time()
 
     for step in range(steps):
@@ -78,17 +81,16 @@ for routing in ["top2", "expert_choice"]:
         y = torch.randint(0, vocab, (4, 128), device=device)
         ce, aux = train_step(model, opt, x, y, aux_coeff)
 
-        if step % 50 == 0:
+        if step % 50 == 0 or step == steps - 1:
             elapsed = time.time() - t0
-            util = expert_utilization(model)
-            print(f"  step {step:>4d} | ce={ce:.3f} | aux={aux:.5f} | util={util.tolist()} | {elapsed:.1f}s")
+            util = expert_utilization(model, vocab)
+            print(f"  step {step:>4d} | ce={ce:.3f} | aux={aux:.5f} | util={[f'{u:.2f}' for u in util.tolist()]} | {elapsed:.1f}s")
             ce_vals.append(ce)
             aux_vals.append(aux)
-            times.append(elapsed)
 
     total = time.time() - t0
-    util = expert_utilization(model)
-    print(f"\n  Final: ce={ce_vals[-1]:.3f} | util={util.tolist()} | {total:.1f}s total")
+    util = expert_utilization(model, vocab)
+    print(f"\n  Final: ce={ce_vals[-1]:.3f} | util={[f'{u:.2f}' for u in util.tolist()]} | {total:.1f}s total")
     results[routing] = dict(ce=ce_vals, aux=aux_vals, time=total, util=util)
 
 print(f"\n{'='*60}")
