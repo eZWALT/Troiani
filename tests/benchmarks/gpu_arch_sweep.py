@@ -103,25 +103,30 @@ class DenseGQABlock(nn.Module):
 layer_idx = 0
 
 class MoEBlock(nn.Module):
-    def __init__(self, d, nh, nkv, ne, h, ws=0):
+    def __init__(self, d, nh, nkv, ne, h, total_layers=22, ws=0):
         super().__init__()
         global layer_idx
         self.idx = layer_idx; layer_idx += 1
         self.an = RMSNorm(d); self.attn = GQALayer(d, nh, nkv, ws)
         self.fn = RMSNorm(d)
         self.ne = ne; self.h = h
+        self.ffn_scale = 1.0 / math.sqrt(2 * total_layers)
         self.router = nn.Linear(d, ne, bias=False)
         nn.init.normal_(self.router.weight, std=0.02)
         self.experts = nn.ModuleList([SwiGLU(d, h) for _ in range(ne)])
 
     def forward(self, x, mask=None):
         x = x + self.attn(self.an(x), mask)
-        if torch.isnan(x).any():
-            print(f"  NaN after attn at L{self.idx}")
+        if torch.isnan(x).any() or torch.isinf(x).any():
+            print(f"  NaN/Inf after attn at L{self.idx}, norm={x.norm():.1f}")
             return None
+        if self.idx == 0:
+            print(f"  Hidden norm: {x.norm():.1f}", end="")
         r = x.clone()
         B, T, D = r.shape
         flat = r.view(-1, D)
+        if self.idx == 0:
+            print(f" → {x.norm():.1f}", end="")
 
         logits = self.router(flat)
         scores = F.softmax(logits.float(), dim=-1).to(logits.dtype)
@@ -137,7 +142,7 @@ class MoEBlock(nn.Module):
             weights = sel_scores[e_mask].unsqueeze(-1)
             out[token_mask] += self.experts[e](flat[token_mask]) * weights
 
-        return x + out.view(B, T, D)
+        return x + out.view(B, T, D) * self.ffn_scale
 
 
 class Mamba2Block(nn.Module):
