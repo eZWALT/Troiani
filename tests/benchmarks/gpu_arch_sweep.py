@@ -1,0 +1,232 @@
+"""GPU benchmark: multiple architectures under 950M.
+Run on Atlas (A100) to compare throughput, memory, convergence."""
+import time
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+
+# ─── helpers ───────────────────────────────────────────────────────
+
+device = torch.device("cuda")
+
+
+def rms_norm(x, weight, eps=1e-6):
+    rms = x.pow(2).mean(-1, keepdim=True).add(eps).sqrt()
+    return x / rms * weight
+
+
+class RMSNorm(nn.Module):
+    def __init__(self, d): super().__init__(); self.w = nn.Parameter(torch.ones(d))
+    def forward(self, x): return rms_norm(x, self.w)
+
+
+def precompute_freqs(dim, T, theta=10000.0):
+    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2, device=device).float() / dim))
+    t = torch.arange(T, device=device).float()
+    freqs = torch.outer(t, freqs)
+    return torch.stack([torch.cos(freqs), torch.sin(freqs)], dim=-1)
+
+
+def apply_rotary(x, freqs_cis):
+    x_2d = x.float().reshape(*x.shape[:-1], -1, 2)
+    x_cos, x_sin = x_2d[..., 0], x_2d[..., 1]
+    f = freqs_cis[:x.shape[-3], :, :].unsqueeze(1)
+    rc, rs = f[..., 0], f[..., 1]
+    out = torch.stack([x_cos * rc - x_sin * rs, x_cos * rs + x_sin * rc], dim=-1)
+    return out.flatten(-2).to(x.dtype)
+
+
+class SwiGLU(nn.Module):
+    def __init__(self, d, h): super().__init__()
+    self.g = nn.Linear(d, h, bias=False); self.u = nn.Linear(d, h, bias=False); self.d = nn.Linear(h, d, bias=False)
+    def forward(self, x): return self.d(F.silu(self.g(x)) * self.u(x))
+
+
+# ─── Architectures ─────────────────────────────────────────────────
+
+class GQALayer(nn.Module):
+    def __init__(self, d, nh, nkv, ws=0):
+        super().__init__()
+        self.nh, self.nkv, self.hd, self.ws = nh, nkv, d // nh, ws
+        self.wq = nn.Linear(d, nh * (d // nh), bias=False)
+        self.wk = nn.Linear(d, nkv * (d // nh), bias=False)
+        self.wv = nn.Linear(d, nkv * (d // nh), bias=False)
+        self.wo = nn.Linear(nh * (d // nh), d, bias=False)
+        self.freqs = None
+
+    def forward(self, x, mask=None):
+        B, T, D = x.shape
+        hd = self.hd
+        q = self.wq(x).view(B, T, self.nh, hd).transpose(1, 2)
+        k = self.wk(x).view(B, T, self.nkv, hd).transpose(1, 2)
+        v = self.wv(x).view(B, T, self.nkv, hd).transpose(1, 2)
+        if self.freqs is None or self.freqs.size(0) < T:
+            self.freqs = precompute_freqs(hd, max(T, 8192))
+        q = apply_rotary(q, self.freqs)
+        k = apply_rotary(k, self.freqs)
+        g = self.nh // self.nkv
+        if g > 1:
+            k = k.repeat_interleave(g, dim=1)
+            v = v.repeat_interleave(g, dim=1)
+        if self.ws:
+            out = F.scaled_dot_product_attention(q, k, v, attn_mask=mask, is_causal=False)
+        else:
+            out = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+        out = out.transpose(1, 2).contiguous().view(B, T, D)
+        return self.wo(out)
+
+
+class DenseGQABlock(nn.Module):
+    def __init__(self, d, nh, nkv, h, ws=0):
+        super().__init__()
+        self.an = RMSNorm(d); self.attn = GQALayer(d, nh, nkv, ws)
+        self.fn = RMSNorm(d); self.ffn = SwiGLU(d, h)
+
+    def forward(self, x, mask=None):
+        x = x + self.attn(self.an(x), mask)
+        h, _ = x, self.ffn(self.fn(x))
+        return x + h
+
+
+class MoEBlock(nn.Module):
+    def __init__(self, d, nh, nkv, ne, h, ws=0):
+        super().__init__()
+        self.an = RMSNorm(d); self.attn = GQALayer(d, nh, nkv, ws)
+        self.fn = RMSNorm(d)
+        self.ne = ne; self.h = h
+        self.router = nn.Linear(d, ne, bias=False)
+        self.experts = nn.ModuleList([SwiGLU(d, h) for _ in range(ne)])
+
+    def forward(self, x, mask=None):
+        x = x + self.attn(self.an(x), mask)
+        r = x.clone()
+        B, T, D = r.shape
+        flat = r.view(-1, D)
+        logits = self.router(flat)
+        scores = F.softmax(logits.float(), dim=-1).to(logits.dtype)
+        k = int(B * T * 1.25 / self.ne)
+        topk_scores, topk_idx = scores.t().topk(k, dim=1)
+        out = torch.zeros_like(flat)
+        for e in range(self.ne):
+            sel = topk_idx[e]
+            w = topk_scores[e].unsqueeze(-1)
+            out.index_add_(0, sel, self.experts[e](flat[sel]) * w)
+        return x + out.view(B, T, D)
+
+
+class Mamba2Block(nn.Module):
+    def __init__(self, d, expand=2, d_state=128, d_conv=4):
+        super().__init__()
+        from mamba_ssm import Mamba2
+        self.mamba = Mamba2(d_model=d, d_state=d_state, d_conv=d_conv, expand=expand)
+        self.norm = RMSNorm(d)
+
+    def forward(self, x, **kw):
+        return x + self.mamba(self.norm(x))
+
+
+class Mamba3Block(nn.Module):
+    def __init__(self, d, expand=2, d_state=128, d_conv=4):
+        super().__init__()
+        from mamba_ssm import Mamba3
+        self.mamba = Mamba3(d_model=d, d_state=d_state, d_conv=d_conv, expand=expand, is_mimo=False)
+        self.norm = RMSNorm(d)
+
+    def forward(self, x, **kw):
+        return x + self.mamba(self.norm(x))
+
+
+class Model(nn.Module):
+    def __init__(self, vocab, d, blocks):
+        super().__init__()
+        self.embed = nn.Embedding(vocab, d)
+        self.blocks = nn.ModuleList(blocks)
+        self.norm = RMSNorm(d)
+        self.head = nn.Linear(d, vocab, bias=False)
+        self.head.weight = self.embed.weight
+
+    def forward(self, x):
+        h = self.embed(x)
+        for b in self.blocks:
+            h = b(h)
+        h = self.norm(h)
+        return self.head(h)
+
+
+# ── Configs ────────────────────────────────────────────────────────
+
+def build_configs():
+    V = 50032
+    return [
+        # tag, d, L, build_fn
+        ("GQA+MoE-6E-2x", 1024, 24, lambda d: [MoEBlock(d, 16, 4, 6, 2*d) for _ in range(24)]),
+        ("Dense-GQA",     1024, 80, lambda d: [DenseGQABlock(d, 16, 4, int(8/3*d)) for _ in range(80)]),
+        ("SWA-4K",        1024, 80, lambda d: [DenseGQABlock(d, 16, 4, int(8/3*d), ws=4096) for _ in range(80)]),
+        ("Mamba2",        1536, 86, lambda d: [Mamba2Block(d) for _ in range(86)]),
+        ("M2+MoE-4E",     896, 54, lambda d: [MoEBlock(d, 16, 4, 4, 2*d) for _ in range(54)]),
+        ("Mamba3",        1536, 74, lambda d: [Mamba3Block(d) for _ in range(74)]),
+    ]
+
+
+def main():
+    V = 50032
+    B, T = 4, 2048
+    steps = 100
+
+    results = []
+    for tag, d, L, build_fn in build_configs():
+        print(f"\n{'='*60}")
+        print(f"Benchmarking: {tag} (d={d}, L={L})")
+        print(f"{'='*60}")
+        torch.cuda.reset_peak_memory_stats()
+
+        model = Model(V, d, build_fn(d)).to(device)
+        total = sum(p.numel() for p in model.parameters())
+        print(f"  Params: {total/1e6:.1f}M")
+
+        opt = optim.AdamW(model.parameters(), lr=3e-4)
+        x = torch.randint(0, V, (B, T), device=device)
+        y = torch.randint(0, V, (B, T), device=device)
+
+        # Warmup
+        for _ in range(5):
+            logits = model(x)
+            loss = F.cross_entropy(logits.view(-1, V), y.view(-1))
+            loss.backward()
+            opt.step(); opt.zero_grad()
+
+        torch.cuda.synchronize()
+        mem0 = torch.cuda.max_memory_allocated()
+        torch.cuda.reset_peak_memory_stats()
+
+        # Benchmark throughput
+        t0 = time.time()
+        losses = []
+        for i in range(steps):
+            logits = model(x)
+            loss = F.cross_entropy(logits.view(-1, V), y.view(-1))
+            loss.backward()
+            opt.step(); opt.zero_grad()
+            losses.append(loss.item())
+        torch.cuda.synchronize()
+        elapsed = time.time() - t0
+        peak_mem = torch.cuda.max_memory_allocated()
+
+        tok_s = B * T * steps / elapsed
+        print(f"  Throughput: {tok_s:.0f} tok/s ({elapsed:.1f}s for {steps} steps)")
+        print(f"  Peak mem:   {peak_mem/1e9:.2f} GB")
+        print(f"  Loss:       {losses[0]:.3f} → {losses[-1]:.3f} (Δ={losses[0]-losses[-1]:.3f})")
+
+        results.append((tag, total, tok_s, peak_mem, losses[0], losses[-1]))
+
+    # Summary table
+    print(f"\n{'='*100}")
+    print(f"{'Architecture':<25s} {'Params':>8s} {'tok/s':>10s} {'Mem':>8s} {'Loss start':>10s} {'Loss end':>10s}")
+    print(f"{'-'*25} {'-'*8} {'-'*10} {'-'*8} {'-'*10} {'-'*10}")
+    for tag, total, tok_s, peak_mem, ls, le in results:
+        print(f"{tag:<25s} {total/1e6:>7.1f}M {tok_s:>10.0f} {peak_mem/1e9:>7.2f}GB {ls:>10.3f} {le:>10.3f}")
+
+
+if __name__ == "__main__":
+    main()
