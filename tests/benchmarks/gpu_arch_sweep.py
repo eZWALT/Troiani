@@ -162,12 +162,12 @@ class Model(nn.Module):
 def build_configs():
     V = 50032
     return [
-        # tag, d, L, dtype, build_fn
-        ("GQA+MoE-6E-2x", 1024, 22, torch.float32, lambda d: [MoEBlock(d, 16, 4, 6, 2*d) for _ in range(22)]),
-        ("Dense-GQA",     1024, 80, torch.bfloat16, lambda d: [DenseGQABlock(d, 16, 4, int(8/3*d)) for _ in range(80)]),
-        ("Mamba2",        1024, 86, torch.bfloat16, lambda d: [Mamba2Block(d, d_state=64) for _ in range(86)]),
-        ("M2+MoE-4E",     768,  54, torch.float32, lambda d: [MoEBlock(d, 16, 4, 4, 2*d) for _ in range(54)]),
-        ("Mamba3",        1024, 74, torch.bfloat16, lambda d: [Mamba3Block(d, d_state=64) for _ in range(74)]),
+        # tag, d, L, build_fn
+        ("GQA+MoE-6E-2x", 1024, 22, lambda d: [MoEBlock(d, 16, 4, 6, 2*d) for _ in range(22)]),
+        ("Dense-GQA",     1024, 80, lambda d: [DenseGQABlock(d, 16, 4, int(8/3*d)) for _ in range(80)]),
+        ("Mamba2",        1024, 86, lambda d: [Mamba2Block(d, d_state=64) for _ in range(86)]),
+        ("M2+MoE-4E",     768,  54, lambda d: [MoEBlock(d, 16, 4, 4, 2*d) for _ in range(54)]),
+        ("Mamba3",        1024, 74, lambda d: [Mamba3Block(d, d_state=64) for _ in range(74)]),
     ]
 
 
@@ -177,13 +177,13 @@ def main():
     steps = 20
 
     results = []
-    for tag, d, L, dtype, build_fn in build_configs():
+    for tag, d, L, build_fn in build_configs():
         print(f"\n{'='*60}")
         print(f"Benchmarking: {tag} (d={d}, L={L})")
         print(f"{'='*60}")
         torch.cuda.reset_peak_memory_stats()
 
-        model = Model(V, d, build_fn(d)).to(device).to(dtype)
+        model = Model(V, d, build_fn(d)).to(device)
         total = sum(p.numel() for p in model.parameters())
         print(f"  Params: {total/1e6:.1f}M")
 
