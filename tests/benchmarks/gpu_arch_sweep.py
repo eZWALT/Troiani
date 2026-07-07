@@ -81,6 +81,8 @@ class GQALayer(nn.Module):
 class DenseGQABlock(nn.Module):
     def __init__(self, d, nh, nkv, h, ws=0):
         super().__init__()
+        global layer_idx
+        self.idx = layer_idx; layer_idx += 1
         self.an = RMSNorm(d)
         self.attn = GQALayer(d, nh, nkv, ws)
         self.fn = RMSNorm(d)
@@ -88,13 +90,23 @@ class DenseGQABlock(nn.Module):
 
     def forward(self, x, mask=None):
         x = x + self.attn(self.an(x), mask)
+        if torch.isnan(x).any():
+            print(f"  NaN after attn at dense L{self.idx}")
+            return None
         x = x + self.ffn(self.fn(x))
+        if torch.isnan(x).any():
+            print(f"  NaN after ffn at dense L{self.idx}")
+            return None
         return x
 
+
+layer_idx = 0
 
 class MoEBlock(nn.Module):
     def __init__(self, d, nh, nkv, ne, h, ws=0):
         super().__init__()
+        global layer_idx
+        self.idx = layer_idx; layer_idx += 1
         self.an = RMSNorm(d); self.attn = GQALayer(d, nh, nkv, ws)
         self.fn = RMSNorm(d)
         self.ne = ne; self.h = h
@@ -104,11 +116,13 @@ class MoEBlock(nn.Module):
 
     def forward(self, x, mask=None):
         x = x + self.attn(self.an(x), mask)
+        if torch.isnan(x).any():
+            print(f"  NaN after attn at L{self.idx}")
+            return None
         r = x.clone()
         B, T, D = r.shape
         flat = r.view(-1, D)
 
-        # Top-2 routing (simpler, more stable)
         logits = self.router(flat)
         scores = F.softmax(logits.float(), dim=-1).to(logits.dtype)
         top2_scores, top2_idx = scores.topk(2, dim=-1)
@@ -121,17 +135,9 @@ class MoEBlock(nn.Module):
             sel_idx = top2_idx[token_mask]
             e_mask = (sel_idx == e)
             weights = sel_scores[e_mask].unsqueeze(-1)
-            expert_out = self.experts[e](flat[token_mask])
-            if torch.isnan(expert_out).any():
-                print(f"NaN in expert {e} at layer input")
-                return None
-            out[token_mask] += expert_out * weights
+            out[token_mask] += self.experts[e](flat[token_mask]) * weights
 
-        result = x + out.view(B, T, D)
-        if torch.isnan(result).any():
-            print("NaN in MoE output")
-            return None
-        return result
+        return x + out.view(B, T, D)
 
 
 class Mamba2Block(nn.Module):
@@ -198,6 +204,7 @@ def main():
         print(f"\n{'='*60}")
         print(f"Benchmarking: {tag} (d={d}, L={L})")
         print(f"{'='*60}")
+        global layer_idx; layer_idx = 0
         torch.cuda.reset_peak_memory_stats()
 
         model = Model(V, d, build_fn(d)).to(device)
