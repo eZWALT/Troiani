@@ -218,9 +218,21 @@ Full training benchmark: **fp32, B=2, T=1024, 20 steps, AdamW** on random next-t
 
 3. **Pure attention (GQA) is surprisingly competitive** in throughput at budget — only 1.6× slower than Mamba-2 while using all 932M params actively.
 
+### MoE NaN Resolution
+
+The NaN in the earlier GQA+MoE benchmarks was a **bug in the inline `MoEBlock` implementation** in `gpu_arch_sweep.py`, not in our actual library (`troiani/models/moe.py`). The library's `TroianiForCausalLM` with Expert Choice routing runs stably:
+
+| Metric | Value |
+|--------|-------|
+| Params | 939.6M |
+| Config | d=1024, L=22, 6E, hidden=2048 |
+| Stability | No NaN across 20 steps |
+| Loss (init → final) | 962 → 82 |
+| Aux loss | 0.009 → 0.87 (balanced routing) |
+
 ### Next Questions
 
 - **Hybrid (Mamba-2 + GQA)**: Can we combine the memory efficiency of Mamba-2 with the convergence benefits of attention? Test GQA every 6th layer.
-- **MoE debugging**: GQA+MoE (6E, 2A, Expert Choice) produces NaN — needs investigation. Possibly bf16 stability or router edge case at init.
+- **Full library benchmark**: Run TroianiForCausalLM + library Dense GQA + Mamba-2/3 in a single script for final comparison.
 - **Sliding window attention**: Dense GQA at window=4096 would reduce memory from O(T²) to O(T·W). Test at seq_len=8192.
-- **GQA+MoE at full budget**: If the NaN is fixed, GQA+MoE would be the most efficient (39% active params).
+- **Mamba-2 + MoE**: Replace GQA with Mamba-2 while keeping MoE for FFN. Test efficiency.
