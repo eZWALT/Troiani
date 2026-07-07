@@ -162,12 +162,15 @@ class Model(nn.Module):
 def build_configs():
     V = 50032
     return [
-        # tag, d, L, build_fn
-        ("GQA+MoE-6E-2x", 1024, 22, lambda d: [MoEBlock(d, 16, 4, 6, 2*d) for _ in range(22)]),
-        ("Dense-GQA",     1024, 80, lambda d: [DenseGQABlock(d, 16, 4, int(8/3*d)) for _ in range(80)]),
-        ("Mamba2",        1024, 86, lambda d: [Mamba2Block(d, d_state=64) for _ in range(86)]),
-        ("M2+MoE-4E",     768,  54, lambda d: [MoEBlock(d, 16, 4, 4, 2*d) for _ in range(54)]),
-        ("Mamba3",        1024, 74, lambda d: [Mamba3Block(d, d_state=64) for _ in range(74)]),
+        ("Dense-GQA-80L",    1024, 80, lambda d: [DenseGQABlock(d, 16, 4, int(8/3*d)) for _ in range(80)]),
+        ("Mamba2-d1024-86L", 1024, 86, lambda d: [Mamba2Block(d, d_state=64) for _ in range(86)]),
+        ("Mamba2-d1024-140L",1024, 140, lambda d: [Mamba2Block(d, d_state=64) for _ in range(140)]),
+        ("Mamba2-d1280-60L", 1280, 60, lambda d: [Mamba2Block(d, d_state=64) for _ in range(60)]),
+        ("Mamba2-d1536-48L", 1536, 48, lambda d: [Mamba2Block(d, d_state=64) for _ in range(48)]),
+        ("Mamba3-d1024-74L", 1024, 74, lambda d: [Mamba3Block(d, d_state=64) for _ in range(74)]),
+        ("Mamba3-d1024-140L",1024, 140, lambda d: [Mamba3Block(d, d_state=64) for _ in range(140)]),
+        ("Mamba3-d1280-52L", 1280, 52, lambda d: [Mamba3Block(d, d_state=64) for _ in range(52)]),
+        ("Mamba3-d1536-40L", 1536, 40, lambda d: [Mamba3Block(d, d_state=64) for _ in range(40)]),
     ]
 
 
@@ -194,29 +197,34 @@ def main():
         x = torch.randint(0, V, (B, T), device=device)
         y = torch.randint(0, V, (B, T), device=device)
 
-        # Warmup
-        for _ in range(5):
-            logits = model(x)
-            loss = F.cross_entropy(logits.view(-1, V), y.view(-1))
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            opt.step(); opt.zero_grad()
+        try:
+            # Warmup
+            for _ in range(5):
+                logits = model(x)
+                loss = F.cross_entropy(logits.view(-1, V), y.view(-1))
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                opt.step(); opt.zero_grad()
 
-        torch.cuda.synchronize()
-        mem0 = torch.cuda.max_memory_allocated()
-        torch.cuda.reset_peak_memory_stats()
+            torch.cuda.synchronize()
+            torch.cuda.reset_peak_memory_stats()
 
-        # Benchmark throughput
-        t0 = time.time()
-        losses = []
-        for i in range(steps):
-            logits = model(x)
-            loss = F.cross_entropy(logits.view(-1, V), y.view(-1))
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            opt.step(); opt.zero_grad()
-            losses.append(loss.item())
-        torch.cuda.synchronize()
+            # Benchmark throughput
+            t0 = time.time()
+            losses = []
+            for i in range(steps):
+                logits = model(x)
+                loss = F.cross_entropy(logits.view(-1, V), y.view(-1))
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                opt.step(); opt.zero_grad()
+                losses.append(loss.item())
+            torch.cuda.synchronize()
+        except (torch.OutOfMemoryError, RuntimeError, ValueError) as e:
+            print(f"  FAILED: {e}")
+            del model, opt
+            torch.cuda.empty_cache()
+            continue
         elapsed = time.time() - t0
         peak_mem = torch.cuda.max_memory_allocated()
 
