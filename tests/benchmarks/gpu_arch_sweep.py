@@ -38,9 +38,13 @@ def apply_rotary(x, freqs_cis):
 
 
 class SwiGLU(nn.Module):
-    def __init__(self, d, h): super().__init__()
-    self.g = nn.Linear(d, h, bias=False); self.u = nn.Linear(d, h, bias=False); self.d = nn.Linear(h, d, bias=False)
-    def forward(self, x): return self.d(F.silu(self.g(x)) * self.u(x))
+    def __init__(self, d, h):
+        super().__init__()
+        self.g = nn.Linear(d, h, bias=False)
+        self.u = nn.Linear(d, h, bias=False)
+        self.d = nn.Linear(h, d, bias=False)
+    def forward(self, x):
+        return self.d(F.silu(self.g(x)) * self.u(x))
 
 
 # ─── Architectures ─────────────────────────────────────────────────
@@ -69,10 +73,7 @@ class GQALayer(nn.Module):
         if g > 1:
             k = k.repeat_interleave(g, dim=1)
             v = v.repeat_interleave(g, dim=1)
-        if self.ws:
-            out = F.scaled_dot_product_attention(q, k, v, attn_mask=mask, is_causal=False)
-        else:
-            out = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+        out = F.scaled_dot_product_attention(q, k, v, is_causal=True)
         out = out.transpose(1, 2).contiguous().view(B, T, D)
         return self.wo(out)
 
@@ -80,13 +81,15 @@ class GQALayer(nn.Module):
 class DenseGQABlock(nn.Module):
     def __init__(self, d, nh, nkv, h, ws=0):
         super().__init__()
-        self.an = RMSNorm(d); self.attn = GQALayer(d, nh, nkv, ws)
-        self.fn = RMSNorm(d); self.ffn = SwiGLU(d, h)
+        self.an = RMSNorm(d)
+        self.attn = GQALayer(d, nh, nkv, ws)
+        self.fn = RMSNorm(d)
+        self.ffn = SwiGLU(d, h)
 
     def forward(self, x, mask=None):
         x = x + self.attn(self.an(x), mask)
-        h, _ = x, self.ffn(self.fn(x))
-        return x + h
+        x = x + self.ffn(self.fn(x))
+        return x
 
 
 class MoEBlock(nn.Module):
