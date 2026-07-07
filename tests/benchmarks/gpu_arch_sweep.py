@@ -107,16 +107,31 @@ class MoEBlock(nn.Module):
         r = x.clone()
         B, T, D = r.shape
         flat = r.view(-1, D)
+
+        # Top-2 routing (simpler, more stable)
         logits = self.router(flat)
         scores = F.softmax(logits.float(), dim=-1).to(logits.dtype)
-        k = int(B * T * 1.25 / self.ne)
-        topk_scores, topk_idx = scores.t().topk(k, dim=1)
+        top2_scores, top2_idx = scores.topk(2, dim=-1)
+
         out = torch.zeros_like(flat)
         for e in range(self.ne):
-            sel = topk_idx[e]
-            w = topk_scores[e].unsqueeze(-1)
-            out.index_add_(0, sel, self.experts[e](flat[sel]) * w)
-        return x + out.view(B, T, D)
+            token_mask = (top2_idx == e).any(dim=-1)
+            if not token_mask.any(): continue
+            sel_scores = top2_scores[token_mask]
+            sel_idx = top2_idx[token_mask]
+            e_mask = (sel_idx == e)
+            weights = sel_scores[e_mask].unsqueeze(-1)
+            expert_out = self.experts[e](flat[token_mask])
+            if torch.isnan(expert_out).any():
+                print(f"NaN in expert {e} at layer input")
+                return None
+            out[token_mask] += expert_out * weights
+
+        result = x + out.view(B, T, D)
+        if torch.isnan(result).any():
+            print("NaN in MoE output")
+            return None
+        return result
 
 
 class Mamba2Block(nn.Module):
@@ -154,6 +169,7 @@ class Model(nn.Module):
         h = self.embed(x)
         for b in self.blocks:
             h = b(h)
+            if h is None: return None
         h = self.norm(h)
         return self.head(h)
 
