@@ -99,6 +99,7 @@ class MoEBlock(nn.Module):
         self.fn = RMSNorm(d)
         self.ne = ne; self.h = h
         self.router = nn.Linear(d, ne, bias=False)
+        nn.init.normal_(self.router.weight, std=0.02)
         self.experts = nn.ModuleList([SwiGLU(d, h) for _ in range(ne)])
 
     def forward(self, x, mask=None):
@@ -165,12 +166,9 @@ def build_configs():
         ("Dense-GQA-80L",    1024, 80, lambda d: [DenseGQABlock(d, 16, 4, int(8/3*d)) for _ in range(80)]),
         ("Mamba2-d1024-86L", 1024, 86, lambda d: [Mamba2Block(d, d_state=64) for _ in range(86)]),
         ("Mamba2-d1024-140L",1024, 140, lambda d: [Mamba2Block(d, d_state=64) for _ in range(140)]),
-        ("Mamba2-d1280-60L", 1280, 60, lambda d: [Mamba2Block(d, d_state=64) for _ in range(60)]),
-        ("Mamba2-d1536-48L", 1536, 48, lambda d: [Mamba2Block(d, d_state=64) for _ in range(48)]),
         ("Mamba3-d1024-74L", 1024, 74, lambda d: [Mamba3Block(d, d_state=64) for _ in range(74)]),
-        ("Mamba3-d1024-140L",1024, 140, lambda d: [Mamba3Block(d, d_state=64) for _ in range(140)]),
-        ("Mamba3-d1280-52L", 1280, 52, lambda d: [Mamba3Block(d, d_state=64) for _ in range(52)]),
-        ("Mamba3-d1536-40L", 1536, 40, lambda d: [Mamba3Block(d, d_state=64) for _ in range(40)]),
+        ("GQA+MoE-6E-22L",   1024, 22, lambda d: [MoEBlock(d, 16, 4, 6, 2*d) for _ in range(22)]),
+        ("GQA+MoE-4E-32L",   896,  32, lambda d: [MoEBlock(d, 16, 4, 4, 2*d) for _ in range(32)]),
     ]
 
 

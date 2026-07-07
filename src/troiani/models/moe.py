@@ -18,6 +18,7 @@ class Top2Router(nn.Module):
     def __init__(self, d_model: int, n_experts: int):
         super().__init__()
         self.router = nn.Linear(d_model, n_experts, bias=False)
+        nn.init.normal_(self.router.weight, std=0.02)
 
     def forward(self, x: torch.Tensor):
         logits = self.router(x)
@@ -39,6 +40,7 @@ class ExpertChoiceRouter(nn.Module):
         super().__init__()
         self.router = nn.Linear(d_model, n_experts, bias=False)
         self.capacity_factor = capacity_factor
+        nn.init.normal_(self.router.weight, std=0.02)
 
     def forward(self, x: torch.Tensor):
         B, T, D = x.shape
