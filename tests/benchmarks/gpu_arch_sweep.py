@@ -179,9 +179,6 @@ def main():
 
     results = []
     for tag, d, L, build_fn in build_configs():
-        if tag.startswith("GQA+MoE") or tag.startswith("M2+MoE"):
-            print(f"\n  SKIP {tag} — NaN in MoE, needs separate debug")
-            continue
         print(f"\n{'='*60}")
         print(f"Benchmarking: {tag} (d={d}, L={L})")
         print(f"{'='*60}")
